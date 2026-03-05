@@ -3,12 +3,10 @@ local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
 
 local LP = Players.LocalPlayer
+local Mouse = LP:GetMouse()
 local Character = LP.Character or LP.CharacterAdded:Wait()
-local RootPart = Character:WaitForChild("HumanoidRootPart")
-local Humanoid = Character:WaitForChild("Humanoid")
 
 local Settings = {
 	Noclip = false,
@@ -22,31 +20,25 @@ local Settings = {
 	TeamCheck = false,
 	NameEsp = false,
 	DistanceEsp = false,
+	HealthEsp = false,
 	EspRange = math.huge,
-	TpTool = false,
-	GlideTool = false,
 	AntiFling = false,
 	AntiSit = false,
 	AntiRagdoll = false,
 	AntiStun = false,
 }
 
+local EspData = {}
 local HidePos = nil
 local OriginalPos = nil
-local BringData = {}
-local EspData = {}
-local SavedPositions = {}
-local HitboxSize = 10
-local BringTargetName = ""
+local BringConnection = nil
 local SpinConnection = nil
 local NoclipConnection = nil
-local BringConnection = nil
-local CurrentThemeColor = Color3.fromRGB(255, 210, 0)
+local SavedPosCount = 0
+local CurrentTheme = Color3.fromRGB(255, 210, 0)
 
 LP.CharacterAdded:Connect(function(c)
 	Character = c
-	RootPart = c:WaitForChild("HumanoidRootPart")
-	Humanoid = c:WaitForChild("Humanoid")
 end)
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -56,22 +48,27 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = CoreGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 480, 0, 340)
-MainFrame.Position = UDim2.new(0.5, -240, 0.5, -170)
-MainFrame.BackgroundColor3 = Color3.fromRGB(8, 8, 12)
+MainFrame.Size = UDim2.new(0, 500, 0, 360)
+MainFrame.Position = UDim2.new(0.5, -250, 0.5, -180)
+MainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
 MainFrame.ClipsDescendants = false
 MainFrame.Parent = ScreenGui
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
 
-local function MakeYellowGradient(parent)
+local function MakeGradient(parent, col)
+	local lighter = Color3.new(
+		math.min(col.R + 0.3, 1),
+		math.min(col.G + 0.3, 1),
+		math.min(col.B + 0.3, 1)
+	)
 	local g = Instance.new("UIGradient")
 	g.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 180, 0)),
-		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 240, 80)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 180, 0))
+		ColorSequenceKeypoint.new(0, col),
+		ColorSequenceKeypoint.new(0.5, lighter),
+		ColorSequenceKeypoint.new(1, col)
 	})
 	g.Rotation = 45
 	g.Parent = parent
@@ -81,142 +78,113 @@ end
 local MainStroke = Instance.new("UIStroke", MainFrame)
 MainStroke.Thickness = 3
 MainStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-MakeYellowGradient(MainStroke)
+MakeGradient(MainStroke, CurrentTheme)
 
 local TopBar = Instance.new("Frame")
-TopBar.Size = UDim2.new(1, 0, 0, 36)
-TopBar.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
+TopBar.Size = UDim2.new(1, 0, 0, 38)
+TopBar.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
 TopBar.BorderSizePixel = 0
+TopBar.ZIndex = 2
 TopBar.Parent = MainFrame
-Instance.new("UICorner", TopBar).CornerRadius = UDim.new(0, 12)
+Instance.new("UICorner", TopBar).CornerRadius = UDim.new(0, 10)
+
+local TopFix = Instance.new("Frame")
+TopFix.Size = UDim2.new(1, 0, 0.5, 0)
+TopFix.Position = UDim2.new(0, 0, 0.5, 0)
+TopFix.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+TopFix.BorderSizePixel = 0
+TopFix.ZIndex = 2
+TopFix.Parent = TopBar
 
 local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Size = UDim2.new(1, -80, 1, 0)
+TitleLabel.Size = UDim2.new(1, -90, 1, 0)
 TitleLabel.Position = UDim2.new(0, 14, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "U N I V E R S A L  H U B"
+TitleLabel.Text = "UNIVERSAL HUB"
 TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextSize = 15
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.ZIndex = 3
 TitleLabel.Parent = TopBar
-MakeYellowGradient(TitleLabel)
+MakeGradient(TitleLabel, CurrentTheme)
 
-local MinBtn = Instance.new("TextButton")
-MinBtn.Size = UDim2.new(0, 26, 0, 26)
-MinBtn.Position = UDim2.new(1, -58, 0, 5)
-MinBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-MinBtn.Text = "-"
-MinBtn.Font = Enum.Font.GothamBold
-MinBtn.TextSize = 16
-MinBtn.BorderSizePixel = 0
-MinBtn.Parent = TopBar
-Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
-local ms = Instance.new("UIStroke", MinBtn)
-ms.Thickness = 2
-MakeYellowGradient(ms)
-MakeYellowGradient(MinBtn)
+local function MakeTopBtn(txt, xOffset)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(0, 28, 0, 28)
+	b.Position = UDim2.new(1, xOffset, 0, 5)
+	b.BackgroundColor3 = Color3.fromRGB(35, 35, 52)
+	b.Text = txt
+	b.Font = Enum.Font.GothamBold
+	b.TextSize = 16
+	b.BorderSizePixel = 0
+	b.ZIndex = 3
+	b.Parent = TopBar
+	Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+	local s = Instance.new("UIStroke", b)
+	s.Thickness = 2
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	MakeGradient(s, CurrentTheme)
+	MakeGradient(b, CurrentTheme)
+	return b
+end
 
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 26, 0, 26)
-CloseBtn.Position = UDim2.new(1, -28, 0, 5)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-CloseBtn.Text = "x"
-CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.TextSize = 16
-CloseBtn.BorderSizePixel = 0
-CloseBtn.Parent = TopBar
-Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
-local cs = Instance.new("UIStroke", CloseBtn)
-cs.Thickness = 2
-MakeYellowGradient(cs)
-MakeYellowGradient(CloseBtn)
+local MinBtn = MakeTopBtn("-", -62)
+local CloseBtn = MakeTopBtn("x", -30)
 
 local TabBar = Instance.new("Frame")
-TabBar.Size = UDim2.new(0, 100, 1, -36)
-TabBar.Position = UDim2.new(0, 0, 0, 36)
-TabBar.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+TabBar.Size = UDim2.new(0, 96, 1, -42)
+TabBar.Position = UDim2.new(0, 4, 0, 42)
+TabBar.BackgroundColor3 = Color3.fromRGB(26, 26, 38)
 TabBar.BorderSizePixel = 0
 TabBar.Parent = MainFrame
-
-local TabBarStroke = Instance.new("UIStroke", TabBar)
-TabBarStroke.Thickness = 1
-TabBarStroke.Color = Color3.fromRGB(50, 50, 30)
+Instance.new("UICorner", TabBar).CornerRadius = UDim.new(0, 8)
 
 local TabList = Instance.new("UIListLayout", TabBar)
 TabList.SortOrder = Enum.SortOrder.LayoutOrder
 TabList.Padding = UDim.new(0, 4)
 
-local TabPadding = Instance.new("UIPadding", TabBar)
-TabPadding.PaddingTop = UDim.new(0, 6)
-TabPadding.PaddingLeft = UDim.new(0, 4)
-TabPadding.PaddingRight = UDim.new(0, 4)
+local TabPad = Instance.new("UIPadding", TabBar)
+TabPad.PaddingTop = UDim.new(0, 6)
+TabPad.PaddingLeft = UDim.new(0, 4)
+TabPad.PaddingRight = UDim.new(0, 4)
 
 local ContentArea = Instance.new("Frame")
-ContentArea.Size = UDim2.new(1, -108, 1, -44)
-ContentArea.Position = UDim2.new(0, 104, 0, 40)
+ContentArea.Size = UDim2.new(1, -108, 1, -48)
+ContentArea.Position = UDim2.new(0, 104, 0, 44)
 ContentArea.BackgroundTransparency = 1
-ContentArea.BorderSizePixel = 0
 ContentArea.Parent = MainFrame
 
 local TabColors = {
-	Player = Color3.fromRGB(255, 220, 0),
-	Combat = Color3.fromRGB(255, 80, 80),
-	ESP = Color3.fromRGB(0, 200, 255),
-	Items = Color3.fromRGB(100, 255, 130),
-	Position = Color3.fromRGB(180, 100, 255),
-	Safety = Color3.fromRGB(255, 160, 50),
-	Theme = Color3.fromRGB(255, 100, 200),
+	Player   = Color3.fromRGB(255, 220, 0),
+	Combat   = Color3.fromRGB(255, 90, 90),
+	ESP      = Color3.fromRGB(0, 210, 255),
+	Items    = Color3.fromRGB(80, 255, 140),
+	Position = Color3.fromRGB(190, 100, 255),
+	Safety   = Color3.fromRGB(255, 165, 50),
+	Theme    = Color3.fromRGB(255, 110, 210),
 }
 
 local TabPages = {}
 local TabBtns = {}
-local ActiveTab = nil
-
-local function MakeColorGradient(parent, c)
-	local r, g, b = c.R, c.G, c.B
-	local lighter = Color3.new(math.min(r + 0.25, 1), math.min(g + 0.25, 1), math.min(b + 0.25, 1))
-	local grad = Instance.new("UIGradient")
-	grad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, c),
-		ColorSequenceKeypoint.new(0.5, lighter),
-		ColorSequenceKeypoint.new(1, c)
-	})
-	grad.Rotation = 45
-	grad.Parent = parent
-	return grad
-end
-
-local function OpenTab(name)
-	for n, page in pairs(TabPages) do
-		page.Visible = n == name
-	end
-	for n, btn in pairs(TabBtns) do
-		if n == name then
-			btn.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-		else
-			btn.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
-		end
-	end
-	ActiveTab = name
-end
 
 local function MakeTab(name, order)
-	local col = TabColors[name] or Color3.fromRGB(255, 220, 0)
+	local col = TabColors[name] or CurrentTheme
 
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(1, 0, 0, 32)
-	btn.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
+	btn.Size = UDim2.new(1, 0, 0, 34)
+	btn.BackgroundColor3 = Color3.fromRGB(32, 32, 48)
 	btn.Text = name
 	btn.Font = Enum.Font.GothamBold
 	btn.TextSize = 11
 	btn.BorderSizePixel = 0
 	btn.LayoutOrder = order
 	btn.Parent = TabBar
-	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-	local bstroke = Instance.new("UIStroke", btn)
-	bstroke.Thickness = 1.5
-	MakeColorGradient(bstroke, col)
-	MakeColorGradient(btn, col)
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
+	local bs = Instance.new("UIStroke", btn)
+	bs.Thickness = 1.8
+	bs.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	MakeGradient(bs, col)
+	MakeGradient(btn, col)
 
 	local page = Instance.new("ScrollingFrame")
 	page.Size = UDim2.new(1, 0, 1, 0)
@@ -224,35 +192,54 @@ local function MakeTab(name, order)
 	page.BorderSizePixel = 0
 	page.ScrollBarThickness = 3
 	page.ScrollBarImageColor3 = col
-	page.Visible = false
 	page.CanvasSize = UDim2.new(0, 0, 0, 0)
 	page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	page.Visible = false
 	page.Parent = ContentArea
 
 	local layout = Instance.new("UIListLayout", page)
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.Padding = UDim.new(0, 6)
+	layout.Padding = UDim.new(0, 5)
 
 	local pad = Instance.new("UIPadding", page)
-	pad.PaddingTop = UDim.new(0, 6)
-	pad.PaddingLeft = UDim.new(0, 4)
-	pad.PaddingRight = UDim.new(0, 4)
+	pad.PaddingTop = UDim.new(0, 5)
+	pad.PaddingLeft = UDim.new(0, 3)
+	pad.PaddingRight = UDim.new(0, 6)
 
 	TabPages[name] = page
 	TabBtns[name] = btn
 
 	btn.MouseButton1Click:Connect(function()
-		OpenTab(name)
+		for n, p in pairs(TabPages) do
+			p.Visible = n == name
+		end
+		for n, b in pairs(TabBtns) do
+			b.BackgroundColor3 = n == name and Color3.fromRGB(42, 42, 62) or Color3.fromRGB(32, 32, 48)
+		end
 	end)
 
 	return page, col
 end
 
+local function MakeLabel(page, txt, col)
+	local l = Instance.new("TextLabel")
+	l.Size = UDim2.new(1, -4, 0, 18)
+	l.BackgroundTransparency = 1
+	l.Text = txt
+	l.Font = Enum.Font.GothamBold
+	l.TextSize = 10
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	l.BorderSizePixel = 0
+	l.Parent = page
+	MakeGradient(l, col)
+	return l
+end
+
 local function MakeToggle(page, txt, col, callback)
 	local state = false
 	local b = Instance.new("TextButton")
-	b.Size = UDim2.new(1, -8, 0, 30)
-	b.BackgroundColor3 = Color3.fromRGB(14, 14, 22)
+	b.Size = UDim2.new(1, -4, 0, 32)
+	b.BackgroundColor3 = Color3.fromRGB(32, 32, 50)
 	b.Text = txt .. ": OFF"
 	b.Font = Enum.Font.GothamBold
 	b.TextSize = 12
@@ -261,8 +248,9 @@ local function MakeToggle(page, txt, col, callback)
 	Instance.new("UICorner", b).CornerRadius = UDim.new(0, 7)
 	local s = Instance.new("UIStroke", b)
 	s.Thickness = 1.8
-	MakeColorGradient(s, col)
-	MakeColorGradient(b, col)
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	MakeGradient(s, col)
+	MakeGradient(b, col)
 	b.MouseButton1Click:Connect(function()
 		state = not state
 		b.Text = txt .. (state and ": ON" or ": OFF")
@@ -273,8 +261,8 @@ end
 
 local function MakeButton(page, txt, col, callback)
 	local b = Instance.new("TextButton")
-	b.Size = UDim2.new(1, -8, 0, 30)
-	b.BackgroundColor3 = Color3.fromRGB(14, 14, 22)
+	b.Size = UDim2.new(1, -4, 0, 32)
+	b.BackgroundColor3 = Color3.fromRGB(32, 32, 50)
 	b.Text = txt
 	b.Font = Enum.Font.GothamBold
 	b.TextSize = 12
@@ -283,70 +271,56 @@ local function MakeButton(page, txt, col, callback)
 	Instance.new("UICorner", b).CornerRadius = UDim.new(0, 7)
 	local s = Instance.new("UIStroke", b)
 	s.Thickness = 1.8
-	MakeColorGradient(s, col)
-	MakeColorGradient(b, col)
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	MakeGradient(s, col)
+	MakeGradient(b, col)
 	b.MouseButton1Click:Connect(callback)
 	return b
 end
 
 local function MakeTextbox(page, placeholder, col)
 	local f = Instance.new("Frame")
-	f.Size = UDim2.new(1, -8, 0, 30)
-	f.BackgroundColor3 = Color3.fromRGB(14, 14, 22)
+	f.Size = UDim2.new(1, -4, 0, 32)
+	f.BackgroundColor3 = Color3.fromRGB(32, 32, 50)
 	f.BorderSizePixel = 0
 	f.Parent = page
 	Instance.new("UICorner", f).CornerRadius = UDim.new(0, 7)
 	local fs = Instance.new("UIStroke", f)
 	fs.Thickness = 1.8
-	MakeColorGradient(fs, col)
+	fs.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	MakeGradient(fs, col)
 	local tb = Instance.new("TextBox", f)
-	tb.Size = UDim2.new(1, -10, 1, 0)
+	tb.Size = UDim2.new(1, -12, 1, 0)
 	tb.Position = UDim2.new(0, 8, 0, 0)
 	tb.BackgroundTransparency = 1
 	tb.PlaceholderText = placeholder
 	tb.Text = ""
 	tb.Font = Enum.Font.Gotham
 	tb.TextSize = 12
-	tb.TextColor3 = col
-	tb.PlaceholderColor3 = Color3.fromRGB(100, 100, 80)
+	tb.TextColor3 = Color3.fromRGB(240, 240, 240)
+	tb.PlaceholderColor3 = Color3.fromRGB(130, 130, 130)
 	tb.TextXAlignment = Enum.TextXAlignment.Left
 	tb.ClearTextOnFocus = false
 	return tb
 end
 
-local function MakeLabel(page, txt, col)
-	local l = Instance.new("TextLabel")
-	l.Size = UDim2.new(1, -8, 0, 20)
-	l.BackgroundTransparency = 1
-	l.Text = txt
-	l.Font = Enum.Font.GothamBold
-	l.TextSize = 11
-	l.TextXAlignment = Enum.TextXAlignment.Left
-	l.BorderSizePixel = 0
-	l.Parent = page
-	MakeColorGradient(l, col)
-	return l
-end
-
 local PlayerPage, PC = MakeTab("Player", 1)
 local CombatPage, CC = MakeTab("Combat", 2)
-local EspPage, EC = MakeTab("ESP", 3)
-local ItemsPage, IC = MakeTab("Items", 4)
-local PosPage, PoC = MakeTab("Position", 5)
+local EspPage, EC    = MakeTab("ESP", 3)
+local ItemsPage, IC  = MakeTab("Items", 4)
+local PosPage, PoC   = MakeTab("Position", 5)
 local SafetyPage, SC = MakeTab("Safety", 6)
-local ThemePage, TC = MakeTab("Theme", 7)
+local ThemePage, TC  = MakeTab("Theme", 7)
 
 MakeLabel(PlayerPage, "CFRAME SPEED", PC)
 local SpeedBox = MakeTextbox(PlayerPage, "Enter speed value...", PC)
 MakeButton(PlayerPage, "Set Speed", PC, function()
 	local v = tonumber(SpeedBox.Text)
-	if v then
-		local h = Character:FindFirstChildOfClass("Humanoid")
-		if h then h.WalkSpeed = v end
-	end
+	local h = Character and Character:FindFirstChildOfClass("Humanoid")
+	if v and h then h.WalkSpeed = v end
 end)
 MakeButton(PlayerPage, "Reset Speed", PC, function()
-	local h = Character:FindFirstChildOfClass("Humanoid")
+	local h = Character and Character:FindFirstChildOfClass("Humanoid")
 	if h then h.WalkSpeed = 16 end
 end)
 
@@ -354,13 +328,11 @@ MakeLabel(PlayerPage, "JUMP POWER", PC)
 local JumpBox = MakeTextbox(PlayerPage, "Enter jump power...", PC)
 MakeButton(PlayerPage, "Set Jump Power", PC, function()
 	local v = tonumber(JumpBox.Text)
-	if v then
-		local h = Character:FindFirstChildOfClass("Humanoid")
-		if h then h.JumpPower = v end
-	end
+	local h = Character and Character:FindFirstChildOfClass("Humanoid")
+	if v and h then h.JumpPower = v end
 end)
 MakeButton(PlayerPage, "Reset Jump Power", PC, function()
-	local h = Character:FindFirstChildOfClass("Humanoid")
+	local h = Character and Character:FindFirstChildOfClass("Humanoid")
 	if h then h.JumpPower = 50 end
 end)
 
@@ -398,9 +370,7 @@ MakeToggle(PlayerPage, "Spinbot", PC, function(v)
 	if v then
 		SpinConnection = RunService.RenderStepped:Connect(function()
 			local rp = Character and Character:FindFirstChild("HumanoidRootPart")
-			if rp then
-				rp.CFrame = rp.CFrame * CFrame.Angles(0, math.rad(10), 0)
-			end
+			if rp then rp.CFrame = rp.CFrame * CFrame.Angles(0, math.rad(8), 0) end
 		end)
 	else
 		if SpinConnection then SpinConnection:Disconnect() SpinConnection = nil end
@@ -415,14 +385,15 @@ MakeToggle(PlayerPage, "Hide", PC, function(v)
 		OriginalPos = rp.CFrame
 		local bp = Instance.new("Part")
 		bp.Name = "HidePlatform"
-		bp.Size = Vector3.new(50, 1, 50)
+		bp.Size = Vector3.new(60, 1, 60)
 		bp.Anchored = true
 		bp.CanCollide = true
 		bp.Transparency = 1
 		bp.Position = Vector3.new(0, -300, 0)
-		bp.Parent = Workspace
+		bp.Parent = workspace
 		HidePos = bp
-		rp.CFrame = CFrame.new(0, -295, 0)
+		task.wait(0.1)
+		rp.CFrame = CFrame.new(0, -296, 0)
 	else
 		if HidePos then HidePos:Destroy() HidePos = nil end
 		if OriginalPos then rp.CFrame = OriginalPos end
@@ -441,9 +412,14 @@ MakeToggle(CombatPage, "Hitbox Expander", CC, function(v)
 					if v then
 						part.Size = Vector3.new(size, size, size)
 						part.CanCollide = false
+						part.Massless = true
 					else
-						if part.Name == "HumanoidRootPart" then part.Size = Vector3.new(2, 2, 1) end
-						if part.Name == "Head" then part.Size = Vector3.new(2, 1, 1) end
+						if part.Name == "HumanoidRootPart" then
+							part.Size = Vector3.new(2, 2, 1)
+							part.CanCollide = false
+						elseif part.Name == "Head" then
+							part.Size = Vector3.new(2, 1, 1)
+						end
 					end
 				end
 			end
@@ -462,8 +438,8 @@ MakeToggle(CombatPage, "Bring All", CC, function(v)
 					local pr = p.Character:FindFirstChild("HumanoidRootPart")
 					if pr then
 						pr.CFrame = rp.CFrame * CFrame.new(0, 0, -3)
-						pr.Velocity = Vector3.zero
-						pr.RotVelocity = Vector3.zero
+						pr.AssemblyLinearVelocity = Vector3.zero
+						pr.AssemblyAngularVelocity = Vector3.zero
 					end
 				end
 			end
@@ -473,8 +449,9 @@ MakeToggle(CombatPage, "Bring All", CC, function(v)
 	end
 end)
 
-MakeLabel(CombatPage, "TARGET", CC)
-local BringTargetBox = MakeTextbox(CombatPage, "Player name...", CC)
+MakeLabel(CombatPage, "TARGET NAME", CC)
+local BringTargetBox = MakeTextbox(CombatPage, "Player name or partial...", CC)
+
 MakeToggle(CombatPage, "Bring Target", CC, function(v)
 	Settings.BringTarget = v
 	if v then
@@ -487,7 +464,7 @@ MakeToggle(CombatPage, "Bring Target", CC, function(v)
 					local pr = p.Character:FindFirstChild("HumanoidRootPart")
 					if pr then
 						pr.CFrame = rp.CFrame * CFrame.new(0, 0, -3)
-						pr.Velocity = Vector3.zero
+						pr.AssemblyLinearVelocity = Vector3.zero
 					end
 				end
 			end
@@ -532,21 +509,25 @@ end
 local function buildEsp(player, character)
 	cleanEsp(player)
 	local highlight = Instance.new("Highlight")
-	highlight.FillTransparency = 0.5
+	highlight.FillTransparency = 0.55
 	highlight.OutlineTransparency = 0
 	highlight.Enabled = false
 	highlight.Parent = character
+
 	local head = character:FindFirstChild("Head")
-	local billboard, distLabel, nameLabel = nil, nil, nil
+	local billboard, nameLabel, distLabel, hpBar, hpFill = nil, nil, nil, nil, nil
+
 	if head then
 		billboard = Instance.new("BillboardGui")
-		billboard.Size = UDim2.new(0, 140, 0, 44)
-		billboard.StudsOffset = Vector3.new(0, 3.2, 0)
+		billboard.Size = UDim2.new(0, 140, 0, 58)
+		billboard.StudsOffset = Vector3.new(0, 3.5, 0)
 		billboard.AlwaysOnTop = true
 		billboard.Enabled = false
 		billboard.Parent = head
+
 		nameLabel = Instance.new("TextLabel")
-		nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+		nameLabel.Size = UDim2.new(1, 0, 0, 18)
+		nameLabel.Position = UDim2.new(0, 0, 0, 0)
 		nameLabel.BackgroundTransparency = 1
 		nameLabel.Font = Enum.Font.GothamBold
 		nameLabel.TextSize = 13
@@ -554,9 +535,10 @@ local function buildEsp(player, character)
 		nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
 		nameLabel.Text = player.Name
 		nameLabel.Parent = billboard
+
 		distLabel = Instance.new("TextLabel")
-		distLabel.Size = UDim2.new(1, 0, 0.5, 0)
-		distLabel.Position = UDim2.new(0, 0, 0.5, 0)
+		distLabel.Size = UDim2.new(1, 0, 0, 16)
+		distLabel.Position = UDim2.new(0, 0, 0, 19)
 		distLabel.BackgroundTransparency = 1
 		distLabel.Font = Enum.Font.Gotham
 		distLabel.TextSize = 11
@@ -564,14 +546,37 @@ local function buildEsp(player, character)
 		distLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
 		distLabel.Text = ""
 		distLabel.Parent = billboard
+
+		local hpBg = Instance.new("Frame")
+		hpBg.Size = UDim2.new(1, 0, 0, 8)
+		hpBg.Position = UDim2.new(0, 0, 0, 38)
+		hpBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+		hpBg.BorderSizePixel = 0
+		hpBg.Parent = billboard
+		Instance.new("UICorner", hpBg).CornerRadius = UDim.new(0, 4)
+
+		hpFill = Instance.new("Frame")
+		hpFill.Size = UDim2.new(1, 0, 1, 0)
+		hpFill.BackgroundColor3 = Color3.fromRGB(80, 255, 100)
+		hpFill.BorderSizePixel = 0
+		hpFill.Parent = hpBg
+		Instance.new("UICorner", hpFill).CornerRadius = UDim.new(0, 4)
 	end
-	EspData[player] = {highlight = highlight, billboard = billboard, nameLabel = nameLabel, distLabel = distLabel, character = character}
+
+	EspData[player] = {
+		highlight = highlight,
+		billboard = billboard,
+		nameLabel = nameLabel,
+		distLabel = distLabel,
+		hpFill = hpFill,
+		character = character
+	}
 end
 
 local function setupEspPlayer(player)
 	if player == LP then return end
 	local function onChar(char)
-		task.delay(0.5, function()
+		task.delay(0.6, function()
 			if char and char.Parent then buildEsp(player, char) end
 		end)
 	end
@@ -595,19 +600,24 @@ RunService.RenderStepped:Connect(function()
 		if not char then continue end
 		local teammate = isTeammate(player)
 		local teamCol = getTeamColor(player)
-		local rp = Character and Character:FindFirstChild("HumanoidRootPart")
-		local pr = char:FindFirstChild("HumanoidRootPart")
-		local dist = rp and pr and (rp.Position - pr.Position).Magnitude or math.huge
+		local myRoot = Character and Character:FindFirstChild("HumanoidRootPart")
+		local theirRoot = char:FindFirstChild("HumanoidRootPart")
+		local dist = myRoot and theirRoot and (myRoot.Position - theirRoot.Position).Magnitude or math.huge
 		local inRange = dist <= Settings.EspRange
+		local show = Settings.EspEnabled and not teammate and inRange
+
 		if data.highlight and data.highlight.Parent then
-			data.highlight.Enabled = Settings.EspEnabled and not teammate and inRange
+			data.highlight.Enabled = show
 			data.highlight.FillColor = teamCol
 			data.highlight.OutlineColor = teamCol
 		end
+
 		if data.billboard and data.billboard.Parent then
-			local showName = Settings.NameEsp and not teammate and inRange
-			local showDist = Settings.DistanceEsp and not teammate and inRange
-			data.billboard.Enabled = (showName or showDist) and Settings.EspEnabled
+			local showName = Settings.NameEsp and show
+			local showDist = Settings.DistanceEsp and show
+			local showHp = Settings.HealthEsp and show
+			data.billboard.Enabled = (showName or showDist or showHp) and show
+
 			if data.nameLabel then
 				data.nameLabel.Visible = showName
 				data.nameLabel.Text = player.Name
@@ -618,7 +628,21 @@ RunService.RenderStepped:Connect(function()
 				data.distLabel.Text = math.floor(dist) .. " studs"
 				data.distLabel.TextColor3 = teamCol
 			end
+			if data.hpFill then
+				local hum = char:FindFirstChildOfClass("Humanoid")
+				if hum then
+					local pct = hum.Health / math.max(hum.MaxHealth, 1)
+					data.hpFill.Size = UDim2.new(math.clamp(pct, 0, 1), 0, 1, 0)
+					data.hpFill.BackgroundColor3 = Color3.fromRGB(
+						math.floor(255 * (1 - pct)),
+						math.floor(255 * pct),
+						50
+					)
+					data.hpFill.Parent.Parent.Visible = showHp
+				end
+			end
 		end
+
 		if data.character ~= char then buildEsp(player, char) end
 	end
 end)
@@ -627,95 +651,76 @@ MakeToggle(EspPage, "ESP", EC, function(v) Settings.EspEnabled = v end)
 MakeToggle(EspPage, "Team Check", EC, function(v) Settings.TeamCheck = v end)
 MakeToggle(EspPage, "Name ESP", EC, function(v) Settings.NameEsp = v end)
 MakeToggle(EspPage, "Distance ESP", EC, function(v) Settings.DistanceEsp = v end)
+MakeToggle(EspPage, "Healthbar ESP", EC, function(v) Settings.HealthEsp = v end)
+MakeToggle(EspPage, "Aimbot", EC, function(v)
+	if v then
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/DanielHubll/DanielHubll/refs/heads/main/Aimbot%20Mobile"))()
+	end
+end)
 
 MakeLabel(EspPage, "ESP RANGE", EC)
-local RangeOptions = {50, 100, 200, 300, 400, 500}
-local RangeLabel = MakeLabel(EspPage, "Selected: INF", EC)
-for _, val in pairs(RangeOptions) do
+local RangeSelected = MakeLabel(EspPage, "Selected: INF", EC)
+local RangeVals = {50, 100, 200, 300, 400, 500}
+for _, val in pairs(RangeVals) do
 	MakeButton(EspPage, tostring(val) .. " studs", EC, function()
 		Settings.EspRange = val
-		RangeLabel.Text = "Selected: " .. val
+		RangeSelected.Text = "Selected: " .. val
 	end)
 end
 MakeButton(EspPage, "INF (No Limit)", EC, function()
 	Settings.EspRange = math.huge
-	RangeLabel.Text = "Selected: INF"
+	RangeSelected.Text = "Selected: INF"
 end)
 
-local TpToolObj = nil
-local GlideToolObj = nil
+local TpToolActive = false
+local GlideActive = false
 local GlideConn = nil
 
 MakeToggle(ItemsPage, "Teleport Tool", IC, function(v)
-	Settings.TpTool = v
+	TpToolActive = v
 	if v then
-		TpToolObj = Instance.new("Tool")
-		TpToolObj.Name = "TpTool"
-		TpToolObj.RequiresHandle = false
-		local sc = Instance.new("LocalScript", TpToolObj)
-		sc.Source = [[
-			local Tool = script.Parent
-			Tool.Activated:Connect(function()
-				local mouse = game.Players.LocalPlayer:GetMouse()
-				local rp = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-				if rp and mouse.Hit then
-					rp.CFrame = CFrame.new(mouse.Hit.Position + Vector3.new(0, 3, 0))
-				end
-			end)
-		]]
-		TpToolObj.Parent = LP.Backpack
-	else
-		if TpToolObj then TpToolObj:Destroy() TpToolObj = nil end
+		local conn
+		conn = Mouse.Button1Down:Connect(function()
+			if not TpToolActive then conn:Disconnect() return end
+			local rp = Character and Character:FindFirstChild("HumanoidRootPart")
+			if rp and Mouse.Hit then
+				rp.CFrame = CFrame.new(Mouse.Hit.Position + Vector3.new(0, 3, 0))
+			end
+		end)
 	end
 end)
 
 MakeToggle(ItemsPage, "Glide Tool", IC, function(v)
-	Settings.GlideTool = v
+	GlideActive = v
+	local hum = Character and Character:FindFirstChildOfClass("Humanoid")
 	if v then
-		GlideToolObj = Instance.new("Tool")
-		GlideToolObj.Name = "GlideTool"
-		GlideToolObj.RequiresHandle = false
-		local sc = Instance.new("LocalScript", GlideToolObj)
-		sc.Source = [[
-			local Tool = script.Parent
-			local UIS = game:GetService("UserInputService")
-			local RunService = game:GetService("RunService")
-			local gliding = false
-			local conn = nil
-			Tool.Activated:Connect(function()
-				gliding = not gliding
-				local rp = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-				local hum = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-				if gliding then
-					if hum then hum.PlatformStand = true end
-					conn = RunService.Heartbeat:Connect(function()
-						if rp then
-							local mouse = game.Players.LocalPlayer:GetMouse()
-							local dir = (mouse.Hit.Position - rp.Position).Unit
-							rp.Velocity = dir * 40
-						end
-					end)
-				else
-					if hum then hum.PlatformStand = false end
-					if conn then conn:Disconnect() end
-				end
-			end)
-		]]
-		GlideToolObj.Parent = LP.Backpack
+		if hum then hum.PlatformStand = true end
+		GlideConn = RunService.Heartbeat:Connect(function()
+			if not GlideActive then
+				if GlideConn then GlideConn:Disconnect() GlideConn = nil end
+				if hum then hum.PlatformStand = false end
+				return
+			end
+			local rp = Character and Character:FindFirstChild("HumanoidRootPart")
+			if rp and Mouse.Hit then
+				local dir = (Mouse.Hit.Position - rp.Position).Unit
+				rp.AssemblyLinearVelocity = dir * 50
+			end
+		end)
 	else
-		if GlideToolObj then GlideToolObj:Destroy() GlideToolObj = nil end
+		if GlideConn then GlideConn:Disconnect() GlideConn = nil end
+		if hum then hum.PlatformStand = false end
 	end
 end)
 
-local SavedPosCount = 0
-
-MakeButton(PosPage, "Save Position", PoC, function()
+local SavePosBtn = MakeButton(PosPage, "Save Position", PoC, function() end)
+SavePosBtn.MouseButton1Click:Connect(function()
 	local rp = Character and Character:FindFirstChild("HumanoidRootPart")
 	if not rp then return end
 	SavedPosCount = SavedPosCount + 1
 	local savedCF = rp.CFrame
 	local idx = SavedPosCount
-	MakeButton(PosPage, "Position " .. idx, PoC, function()
+	MakeButton(PosPage, "Teleport: Position " .. idx, PoC, function()
 		local r = Character and Character:FindFirstChild("HumanoidRootPart")
 		if r then r.CFrame = savedCF end
 	end)
@@ -723,83 +728,67 @@ end)
 
 MakeToggle(SafetyPage, "Anti Fling", SC, function(v)
 	Settings.AntiFling = v
-	if v then
-		RunService.Heartbeat:Connect(function()
-			if not Settings.AntiFling then return end
-			local rp = Character and Character:FindFirstChild("HumanoidRootPart")
-			if rp then
-				if rp.Velocity.Magnitude > 200 then
-					rp.Velocity = Vector3.zero
-					rp.RotVelocity = Vector3.zero
-				end
-			end
-		end)
-	end
 end)
 
 MakeToggle(SafetyPage, "Anti Sit", SC, function(v)
 	Settings.AntiSit = v
-	if v then
-		RunService.Heartbeat:Connect(function()
-			if not Settings.AntiSit then return end
-			local h = Character and Character:FindFirstChildOfClass("Humanoid")
-			if h and h.Sit then h.Sit = false end
-		end)
-	end
 end)
 
 MakeToggle(SafetyPage, "Anti Ragdoll", SC, function(v)
 	Settings.AntiRagdoll = v
-	if v then
-		RunService.Heartbeat:Connect(function()
-			if not Settings.AntiRagdoll then return end
-			local h = Character and Character:FindFirstChildOfClass("Humanoid")
-			if h then
-				if h:GetState() == Enum.HumanoidStateType.Ragdoll or h:GetState() == Enum.HumanoidStateType.FallingDown then
-					h:ChangeState(Enum.HumanoidStateType.GettingUp)
-				end
-			end
-		end)
-	end
 end)
 
 MakeToggle(SafetyPage, "Anti Stun", SC, function(v)
 	Settings.AntiStun = v
-	if v then
-		RunService.Heartbeat:Connect(function()
-			if not Settings.AntiStun then return end
-			local h = Character and Character:FindFirstChildOfClass("Humanoid")
-			if h then
-				if h.WalkSpeed < 2 and h.WalkSpeed ~= 0 then
-					h.WalkSpeed = 16
-				end
-			end
-		end)
+end)
+
+RunService.Heartbeat:Connect(function()
+	local rp = Character and Character:FindFirstChild("HumanoidRootPart")
+	local hum = Character and Character:FindFirstChildOfClass("Humanoid")
+	if rp and Settings.AntiFling then
+		if rp.AssemblyLinearVelocity.Magnitude > 200 then
+			rp.AssemblyLinearVelocity = Vector3.zero
+			rp.AssemblyAngularVelocity = Vector3.zero
+		end
+	end
+	if hum and Settings.AntiSit and hum.Sit then
+		hum.Sit = false
+	end
+	if hum and Settings.AntiRagdoll then
+		local st = hum:GetState()
+		if st == Enum.HumanoidStateType.Ragdoll or st == Enum.HumanoidStateType.FallingDown then
+			hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+		end
+	end
+	if hum and Settings.AntiStun then
+		if hum.WalkSpeed < 4 and hum.WalkSpeed ~= 0 then
+			hum.WalkSpeed = 16
+		end
 	end
 end)
 
 local ThemeColors = {
-	Color3.fromRGB(255, 210, 0),
-	Color3.fromRGB(0, 200, 255),
-	Color3.fromRGB(255, 60, 60),
-	Color3.fromRGB(60, 255, 100),
-	Color3.fromRGB(180, 80, 255),
-	Color3.fromRGB(255, 140, 0),
-	Color3.fromRGB(255, 80, 180),
-	Color3.fromRGB(0, 255, 200),
-	Color3.fromRGB(255, 255, 255),
-	Color3.fromRGB(120, 180, 255),
+	{Color3.fromRGB(255, 210, 0),   "Yellow"},
+	{Color3.fromRGB(0, 200, 255),   "Cyan"},
+	{Color3.fromRGB(255, 60, 60),   "Red"},
+	{Color3.fromRGB(60, 255, 110),  "Green"},
+	{Color3.fromRGB(180, 80, 255),  "Purple"},
+	{Color3.fromRGB(255, 145, 0),   "Orange"},
+	{Color3.fromRGB(255, 80, 180),  "Pink"},
+	{Color3.fromRGB(0, 255, 200),   "Teal"},
+	{Color3.fromRGB(255, 255, 255), "White"},
+	{Color3.fromRGB(100, 160, 255), "Blue"},
 }
 
-local ThemeNames = {"Yellow","Cyan","Red","Green","Purple","Orange","Pink","Teal","White","Blue"}
+MakeLabel(ThemePage, "SELECT THEME", TC)
 
-MakeLabel(ThemePage, "SELECT THEME COLOR", TC)
-
-for i, col in pairs(ThemeColors) do
+for _, data in pairs(ThemeColors) do
+	local col = data[1]
+	local name = data[2]
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(1, -8, 0, 30)
-	btn.BackgroundColor3 = Color3.fromRGB(14, 14, 22)
-	btn.Text = ThemeNames[i]
+	btn.Size = UDim2.new(1, -4, 0, 32)
+	btn.BackgroundColor3 = Color3.fromRGB(32, 32, 50)
+	btn.Text = name
 	btn.Font = Enum.Font.GothamBold
 	btn.TextSize = 12
 	btn.BorderSizePixel = 0
@@ -807,18 +796,28 @@ for i, col in pairs(ThemeColors) do
 	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
 	local bs = Instance.new("UIStroke", btn)
 	bs.Thickness = 1.8
-	MakeColorGradient(bs, col)
-	MakeColorGradient(btn, col)
+	bs.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	MakeGradient(bs, col)
+	MakeGradient(btn, col)
 	btn.MouseButton1Click:Connect(function()
-		CurrentThemeColor = col
+		CurrentTheme = col
+		local lighter = Color3.new(
+			math.min(col.R + 0.3, 1),
+			math.min(col.G + 0.3, 1),
+			math.min(col.B + 0.3, 1)
+		)
+		local newSeq = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, col),
+			ColorSequenceKeypoint.new(0.5, lighter),
+			ColorSequenceKeypoint.new(1, col)
+		})
 		for _, v in pairs(MainFrame:GetDescendants()) do
-			if v:IsA("UIGradient") and v.Parent == MainStroke then
-				v.Color = ColorSequence.new({
-					ColorSequenceKeypoint.new(0, col),
-					ColorSequenceKeypoint.new(0.5, Color3.new(math.min(col.R + 0.3, 1), math.min(col.G + 0.3, 1), math.min(col.B + 0.3, 1))),
-					ColorSequenceKeypoint.new(1, col)
-				})
+			if v:IsA("UIGradient") and (v.Parent == MainStroke) then
+				v.Color = newSeq
 			end
+		end
+		for _, v in pairs(TopBar:GetDescendants()) do
+			if v:IsA("UIGradient") then v.Color = newSeq end
 		end
 	end)
 end
@@ -829,8 +828,8 @@ MinBtn.MouseButton1Click:Connect(function()
 	MinBtn.Text = Minimized and "+" or "-"
 	TabBar.Visible = not Minimized
 	ContentArea.Visible = not Minimized
-	TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Size = Minimized and UDim2.new(0, 480, 0, 36) or UDim2.new(0, 480, 0, 340)
+	TweenService:Create(MainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Size = Minimized and UDim2.new(0, 500, 0, 38) or UDim2.new(0, 500, 0, 360)
 	}):Play()
 end)
 
@@ -840,9 +839,9 @@ end)
 
 task.spawn(function()
 	local step = 0
-	while task.wait(0.01) do
-		step = step + 0.02
-		local offset = Vector2.new(math.sin(step) * 0.8, 0)
+	while task.wait(0.016) do
+		step = step + 0.018
+		local offset = Vector2.new(math.sin(step) * 0.75, 0)
 		for _, v in pairs(MainFrame:GetDescendants()) do
 			if v:IsA("UIGradient") then
 				v.Offset = offset
@@ -851,4 +850,5 @@ task.spawn(function()
 	end
 end)
 
-OpenTab("Player")
+TabPages["Player"].Visible = true
+TabBtns["Player"].BackgroundColor3 = Color3.fromRGB(42, 42, 62)
